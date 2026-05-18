@@ -254,7 +254,6 @@ void CMenu::MenuAimbot(int iTab)
 						FSlider(Vars::Aimbot::Projectile::HitChance, FSliderEnum::Right);
 					}
 					PopTransparent();
-					PopTransparent();
 					FSlider(Vars::Aimbot::Projectile::AutodetRadius, FSliderEnum::Left);
 					FSlider(Vars::Aimbot::Projectile::SplashRadius, FSliderEnum::Right);
 					PushTransparent(!Vars::Aimbot::Projectile::AutoRelease.Value);

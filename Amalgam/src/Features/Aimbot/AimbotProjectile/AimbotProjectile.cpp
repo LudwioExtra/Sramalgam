@@ -473,16 +473,16 @@ static inline std::vector<std::pair<Vec3, int>> ComputeSphere(float flRadius,
     // toward the lower hemisphere (ground-level), where most wallbangs occur.
     float frac = n / (std::max(1.f, iSamples - 1.f)); // 0..1 (top to bottom)
     if (flBias > 0.f)
-      frac = powf(frac, 1.f - flBias * 0.6f); // expand bottom, compress top
+      frac = powf(frac, 1.f - flBias); // expand bottom, compress top
 
     float y = 1.f - frac * 2.f;
     float r_surface = sqrtf(std::max(0.f, 1.f - y * y));
     float x = cosf(t) * r_surface;
     float z = sinf(t) * r_surface;
 
-    // Volumetric distribution: vary radius based on sample index
-    // Denser towards center: linear scaling n/N (more points near center)
-    float flVolRadius = flRadius * (float(n) / std::max(1.f, iSamples - 1.f));
+    // Volumetric distribution: cube-root scaling gives uniform density per unit
+    // volume (linear would over-sample near center, cbrt corrects for r^2 area)
+    float flVolRadius = flRadius * cbrtf(float(n) / std::max(1.f, iSamples - 1.f));
 
     Vec3 vPoint = Vec3(x, y, z) * flVolRadius;
     vPoint = Math::RotatePoint(vPoint, {}, {flRotateX, flRotateY});
@@ -1107,17 +1107,22 @@ std::vector<Point_t> CAimbotProjectile::GetSplashPointsSimple(
           const int iStart = t * iPointsPerThread;
           const int iEnd = std::min(iStart + iPointsPerThread, iTotalPoints);
 
+          std::vector<std::pair<Point_t, float>> vThreadDistances;
           for (int i = iStart; i < iEnd; i++) {
             Point_t tPoint = {vSpherePoints[i], {}};
             CalculateAngle(m_tInfo.m_vLocalEye, tPoint.m_vPoint, iSimTime,
                            tPoint.m_tSolution, true,
                            !m_tInfo.m_iArmTime ? 0 : -1);
 
-            if (tPoint.m_tSolution.m_iCalculated == CalculatedEnum::Good) {
-              std::lock_guard lock(m_PointsMutex);
-              vPointDistances.emplace_back(tPoint,
-                                           tPoint.m_vPoint.DistTo(vOrigin));
-            }
+            if (tPoint.m_tSolution.m_iCalculated == CalculatedEnum::Good)
+              vThreadDistances.emplace_back(tPoint, tPoint.m_vPoint.DistTo(vOrigin));
+          }
+
+          if (!vThreadDistances.empty()) {
+            std::lock_guard lock(m_PointsMutex);
+            vPointDistances.insert(vPointDistances.end(),
+                                   vThreadDistances.begin(),
+                                   vThreadDistances.end());
           }
         }));
   }
